@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="description" content="Jonas Eriksson RPN implementation" />
+		<meta name="author" content="Jonas Eriksson" />
+		<link rel="shortcut icon" href="images/favicon.png" />
+		<title>Jonas Eriksson - RPN</title>
+		<link href="css/bootstrap.min.css" rel="stylesheet" />
+	</head>
+	<body>
+		<div class="jumbotron">
+			<div class="container">
+				<h1>RPN</h1>
+				<p class="text-muted">
+					<small>
+						A small JavaScrip application utilizing <a href="http://en.wikipedia.org/wiki/Shunting-yard_algorithm" target="_blank">Shunting-yard algorithm</a>
+						to produce output in <a href="http://en.wikipedia.org/wiki/Reverse_Polish_notation">Reverse Polish notation</a>.<br />
+						Note: <a href="http://en.wikipedia.org/wiki/Function_(mathematics)" target="_blank">function</a> tokens are currently not supported.
+					</small>
+				</p>
+				<p>
+					<div class="col-xs-12 col-sm-8 col-md-6">
+						<form id="rpn" role="form">
+							<div class="input-group">
+								<input type="text" class="form-control" id="expression" placeholder="Mathematical expression, i.e. 3 + 4 * 2 / ( 1 - 5 ) ^ 2 ^ 3">
+								<span class="input-group-btn">
+									<button class="btn btn-default" type="submit">Submit</button>
+								</span>
+							</div>
+						</form>
+					</div>
+					<div id="rpn-result"></div>
+				</p>
+			</div>
+		</div>
+		<div class="container">
+			<div class="row">
+				<div class="col-lg-4">
+					<h2>Happy Pie</h2>
+					<p>Proud member of the Happy Pie team, a small web and mobile production agency - avaliable for hire!</p>
+					<p><a class="btn btn-default" href="http://happy-pie.com/">Happy Pie &raquo;</a></p>
+				</div>
+				<div class="col-lg-4">
+					<h2>Parkour Panda</h2>
+					<p>The first Happy Pie release! Parkour Panda is a side scrolling game with physics based puzzles.</p>
+					<p><a class="btn btn-default" href="http://parkourpanda.com/">Parkour Panda &raquo;</a></p>
+				</div>
+				<div class="col-lg-4">
+					<h2>Contact me</h2>
+					<p>
+						E-mail: it@joer.se<br />
+						Mobile: +46708249641<br />
+						Skype: joer_78<br />
+						LinkedIn: <a href="http://se.linkedin.com/in/jonas78">http://se.linkedin.com/in/jonas78</a>
+					</p>
+				</div>
+			</div>
+
+			<hr>
+
+			<footer>
+				<p>&copy; Jonas Eriksson 2014</p>
+			</footer>
+		</div>
+
+		<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js" ></script>
+		<script src="js/bootstrap.min.js"></script>
+		<script>
+			// when the DOM is ready
+			$(function() {
+
+				/**
+				 * Base token class holding value and precedence
+				 *
+				 * @param value
+				 * @param precedence
+				 * @constructor
+				 */
+				function RpnToken(value, precedence){
+					this.value = value;
+					this.precedence = precedence || 1;
+				}
+				RpnToken.prototype.getValue = function(){ return this.value; }
+				RpnToken.prototype.getPrecedence = function() { return this.precedence; }
+
+
+				/**
+				 * Number token. RPN token subclass
+				 *
+				 * @param value
+				 * @constructor
+				 */
+				function NumberToken(value){
+					this.value = value;
+				}
+				NumberToken.prototype = new RpnToken();
+
+
+				/**
+				 * Parenthesis token. RPN token subclass
+				 *
+				 * @param value
+				 * @constructor
+				 */
+				function ParenthesisToken(value){
+					this.value = value;
+				}
+				ParenthesisToken.prototype = new RpnToken();
+				ParenthesisToken.prototype.getIsLeft = function() { return this.value == "("; }
+
+
+				/**
+				 * Operator Token, serving as base class for all mathematical operations. RPN token subclass
+				 *
+				 * @param value
+				 * @param precedence
+				 * @param rightAssociative
+				 * @constructor
+				 */
+				function OperatorToken(value, precedence, rightAssociative){
+					this.value = value;
+					this.precedence = precedence;
+					this.rightAssociative = rightAssociative || false;
+				}
+				OperatorToken.prototype = new RpnToken();
+				OperatorToken.prototype.getIsRightAssociative = function() { return this.rightAssociative; }
+				OperatorToken.prototype.performUnary = function(a){ return a; }
+
+				/**
+				 * Plus Operator
+				 * @constructor
+				 */
+				function PlusOperator(){}
+				PlusOperator.prototype = new OperatorToken("+", 2);
+				PlusOperator.prototype.perform = function(a, b){ return new NumberToken(a.getValue() + b.getValue()); }
+
+				/**
+				 * Minus Operator
+				 * @constructor
+				 */
+				function MinusOperator(){}
+				MinusOperator.prototype = new OperatorToken("-", 2);
+				MinusOperator.prototype.perform = function(a, b){ return new NumberToken(a.getValue() - b.getValue()); }
+				MinusOperator.prototype.performUnary = function(a){ return new NumberToken(a.getValue() * -1); }
+
+				/**
+				 * Multiplication Operator
+				 * @constructor
+				 */
+				function MultiplicationOperator(){}
+				MultiplicationOperator.prototype = new OperatorToken("*", 3);
+				MultiplicationOperator.prototype.perform = function(a, b){ return new NumberToken(a.getValue() * b.getValue()); }
+
+				/**
+				 * Division Operator
+				 * @constructor
+				 */
+				function DivisionOperator(){}
+				DivisionOperator.prototype = new OperatorToken("/", 3);
+				DivisionOperator.prototype.perform = function(a, b){ return new NumberToken(a.getValue() / b.getValue()); }
+
+				/**
+				 * Power Operator
+				 * @constructor
+				 */
+				function PowerOperator(){}
+				PowerOperator.prototype = new OperatorToken("^", 4, true);
+				PowerOperator.prototype.perform = function(a, b){ return new NumberToken(Math.pow(a.getValue(), b.getValue())); }
+
+				/**
+				 * Parse string to numbers and operations
+				 *
+				 * @param str Mathematical expression as string
+				 * @returns {Array}
+				 */
+				function strToTokenArray(str) {
+					var ret = [];
+					var number = '';
+
+					// For each char in string
+					for (var i = 0; i < str.length; i++) {
+						// If it is a digit
+						if (str.charAt(i) == '.' || !isNaN(parseInt(str.charAt(i)))) {
+							// Since next char might also be digit (part of same number), simply append and add later
+							number += str.charAt(i);
+						}
+						// Not a number...
+						else {
+							// Add (and reset) the number (if there is one)
+							if (number != '') {
+								ret.push(new NumberToken(parseFloat(number)));
+								number = '';
+							}
+
+							// If it is an accepted operation. Will ignore whitespace, ',', whatever
+							switch (str.charAt(i)) {
+								case '+':
+									ret.push(new PlusOperator());
+									break;
+								case '-':
+									ret.push(new MinusOperator());
+									break;
+								case '*':
+									ret.push(new MultiplicationOperator());
+									break;
+								case '/':
+									ret.push(new DivisionOperator());
+									break;
+								case '^':
+									ret.push(new PowerOperator());
+									break;
+								case '(':
+									ret.push(new ParenthesisToken('('));
+									break;
+								case ')':
+									ret.push(new ParenthesisToken(')'));
+									break;
+							}
+						}
+					}
+
+					// If there is a number, add it
+					if (number != '') {
+						ret.push(new NumberToken(parseFloat(number)));
+					}
+
+					return ret;
+				}
+
+				/**
+				 * Form submit, do the work!
+				 */
+				$('form#rpn').submit(function(){
+					var self = $(this);
+					var tokens = strToTokenArray($('input#expression', self).val());
+					var output = [];
+					var stack = []; // Note: the stack is an array and not a stack, but js push/pop works with last element :)
+					var rpnStack = []; // Stack to store tokens for RPN parsing to calculate result
+
+					// http://en.wikipedia.org/wiki/Shunting-yard_algorithm
+					// While there are tokens to be read:
+					for (var i in tokens) {
+						var token = tokens[i];
+						// If the token is a number, then add it to the output queue.
+						if (token instanceof NumberToken) {
+							output.push(token.getValue());
+							rpnStack.push(token);
+						}
+
+						// No function support, skip
+						// "If the token is a function token, then push it onto the stack"
+						// and "If the token is a function argument separator (e.g., a bracket)"
+
+						// If the token is an operator, o1, then
+						else if (token instanceof OperatorToken) {
+
+							// while there is an operator token, o2, at the top of the stack, and
+							while (stack.length > 0) {
+								// either o1 is left-associative and its precedence is equal to that of o2,
+								// or o1 has precedence less than that of o2,
+								if ((!token.getIsRightAssociative() && token.getPrecedence() == stack[stack.length-1].getPrecedence())
+									|| token.getPrecedence() < stack[stack.length-1].getPrecedence()) {
+									// pop o2 off the stack, onto the output queue;
+									var o2 = stack.pop();
+									output.push(o2.getValue());
+									rpnStack.push(o2);
+								}
+								else {
+									break;
+								}
+							}
+
+							// push o1 onto the stack.
+							stack.push(token);
+						}
+
+						// If the token is a left parenthesis
+						else if (token instanceof ParenthesisToken) {
+							// If the token is a left parenthesis, then push it onto the stack.
+							if (token.getIsLeft()) {
+								stack.push(token);
+							}
+							// If the token is a right parenthesis:
+							else {
+								// Until the token at the top of the stack is a left parenthesis, pop operators off the stack onto the output queue.
+								var found = false;
+								while (stack.length > 0) {
+									var op = stack.pop();
+									// Until the token at the top of the stack is a left parenthesis
+									if ((op instanceof ParenthesisToken) && op.getIsLeft()) {
+										// Pop the left parenthesis from the stack, but not onto the output queue.
+										found = true;
+										break;
+									}
+									// pop operators off the stack onto the output queue
+									// No function support (If the token at the top of the stack is a function token, pop it onto the output queue.)
+									else {
+										output.push(op.getValue());
+										rpnStack.push(op);
+									}
+								}
+
+								// If the stack runs out without finding a left parenthesis, then there are mismatched parentheses.
+								if (!found) {
+									$('div#rpn-result').html('mismatched parentheses - no left parenthesis found');
+									return false;
+								}
+							}
+						}
+
+						console.log('token: "' + token.getValue() + '", current output: ' + output.join(' '));
+					}
+
+					// When there are no more tokens to read:
+					// While there are still operator tokens in the stack:
+					while (stack.length > 0) {
+						var op = stack.pop();
+						// If the operator token on the top of the stack is a parenthesis, then there are mismatched parentheses.
+						if (op instanceof ParenthesisToken) {
+							$('div#rpn-result').html('mismatched parentheses - unexpected parenthesis found');
+							return false;
+						}
+						// Pop the operator onto the output queue.
+						else {
+							output.push(op.getValue());
+							rpnStack.push(op);
+							console.log('token: "' + op.getValue() + '", current output: ' + output.join(' '));
+						}
+					}
+
+					// Calculate expression
+					stack = [];
+					for (var i in rpnStack) {
+						if (rpnStack[i] instanceof NumberToken) {
+							stack.push(rpnStack[i]);
+						}
+
+						else if (rpnStack[i] instanceof OperatorToken) {
+							if (stack.length > 1) {
+								var b = stack.pop();
+								var a = stack.pop();
+								stack.push(rpnStack[i].perform(a, b));
+							}
+							else if (stack.length == 1) {
+								stack.push(rpnStack[i].performUnary(stack.pop()));
+							}
+						}
+					}
+
+					$('div#rpn-result').html(output.join(' ') + ' = ' + stack.pop().getValue());
+
+					return false;
+				});
+			});
+		</script>
+	</body>
+</html>
